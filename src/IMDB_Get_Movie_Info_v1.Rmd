@@ -1,0 +1,63 @@
+---
+title: "Get Movie Info"
+author: "QIAN,HAISHAN"
+date: "1/14/2021"
+output: html_document
+---
+```{r}
+
+setwd("~/Documents/Study/Capstone 2021/project workspace/team-media/src/R")
+
+# load the required libraries
+library("readxl") # used to read excel files
+library("dplyr") # used for data munging 
+library("FNN") # used for knn regression (knn.reg function)
+library("caret") # used for various predictive models
+library("class") # for using confusion matrix function
+library("rpart.plot") # used to plot decision tree
+library("rpart")  # used for Regression tree
+library("glmnet") # used for Lasso and Ridge regression
+library('NeuralNetTools') # used to plot Neural Networks
+library("PRROC") # top plot ROC curve
+library("ROCR") # top plot lift curve
+library("tidyverse")
+library("skimr")
+
+# load libraries for web scraping
+library(xml2)
+library(rvest)
+library(stringr)
+
+library(RJSONIO)
+
+
+full_movie_data = read_csv("Movie_List_v2.csv", col_names =  TRUE)
+
+for (i in 1:nrow(full_movie_data)){
+
+  omdb_json<-fromJSON(full_movie_data[i,]$omdb_link)
+  #full_movie_data[i,"release_date"] = as.character(as.Date(omdb_json$Released, "%d %b %Y"))
+  full_movie_data[i,]$release_date = as.character(as.Date(omdb_json$Released, "%d %b %Y"))
+  full_movie_data[i,]$rated = omdb_json$Rated
+  full_movie_data[i,]$runtime = omdb_json$Runtime
+  full_movie_data[i,]$genre = omdb_json$Genre
+  full_movie_data[i,]$director = omdb_json$Director
+  full_movie_data[i,]$writer = omdb_json$Writer
+  full_movie_data[i,]$actors = omdb_json$Actors
+  full_movie_data[i,]$plot = omdb_json$Plot
+  full_movie_data[i,]$language = omdb_json$Language
+  full_movie_data[i,]$country = omdb_json$Country
+  full_movie_data[i,]$awards = omdb_json$Awards
+  full_movie_data[i,]$imdbVotes = omdb_json$imdbVotes
+  full_movie_data[i,]$type = omdb_json$Type
+  full_movie_data[i,]$dvd = omdb_json$DVD
+  full_movie_data[i,]$boxoffice = omdb_json$BoxOffice
+  full_movie_data[i,]$production = omdb_json$Production
+  full_movie_data[i,]$website = omdb_json$Website
+  
+}
+
+filename1 <- "Movie_List_v4"
+
+write.csv(full_movie_data, paste(filename1, ".csv",sep=""), row.names=FALSE)
+```
