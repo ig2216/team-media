@@ -1,0 +1,228 @@
+---
+title: "Generate Capstone Project Movie List"
+author: "QIAN,HAISHAN"
+date: "1/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("~/Documents/Study/Capstone 2021/project workspace/team-media/src/R")
+```
+
+## R Markdown
+
+
+```{r message=FALSE,  warning=FALSE}
+# load the required libraries
+library("readxl") # used to read excel files
+library("dplyr") # used for data munging 
+library("FNN") # used for knn regression (knn.reg function)
+library("caret") # used for various predictive models
+library("class") # for using confusion matrix function
+library("rpart.plot") # used to plot decision tree
+library("rpart")  # used for Regression tree
+library("glmnet") # used for Lasso and Ridge regression
+library('NeuralNetTools') # used to plot Neural Networks
+library("PRROC") # top plot ROC curve
+library("ROCR") # top plot lift curve
+library("tidyverse")
+library("skimr")
+
+# load libraries for web scraping
+library(xml2)
+library(rvest)
+library(stringr)
+
+library(RJSONIO)
+
+```
+
+```{r}
+full_movie_data = read_csv("IMDB_Movie_List.csv", col_names =  TRUE)
+full_movie_data = full_movie_data[full_movie_data$BoxofficeLink>0,]
+
+```
+
+Select 200 movies randomly from the list.
+```{r}
+selected_movie_list <- full_movie_data[sample(nrow(full_movie_data),1366),]
+```
+
+Now read the URL link of each movie, save the file to local copy.
+```{r}
+
+require(RCurl)
+require(XML)
+
+webpage_df <- data.frame("web"=character())
+
+
+library(downloader)
+library(stringr)
+
+for(i in 1:1366) {
+  myurl <- as.character(selected_movie_list[i,4])
+  filename<-paste("collected/", as.character(selected_movie_list[i,1]), as.character(selected_movie_list[i,2]), ".html", sep="")
+  print(filename)
+  download(myurl, filename)
+  Sys.sleep(2)
+}
+
+
+```
+
+
+Next open each file and find IMDB id
+
+```{r pressure, echo=FALSE}
+require(RCurl)
+require(XML)
+
+library(RJSONIO)
+
+setwd("~/Documents/Study/Capstone 2021/project workspace/team-media/src/R/collected")
+fileNames <- Sys.glob("*.html")
+
+omdb_base = "http://www.omdbapi.com/?apikey=2dcdc723&type=movie&r=json&i="
+imdb_base = "https://www.imdb.com/title/"
+df <- data.frame(
+                  internal_id=character(),
+                  imdb_id=character(),
+                  line=character(),
+                  omdb_link=character(),
+                  title=character(),
+                  year=character(),
+                  imdbRating=character(),
+                  Metascore = character(),
+                  imdb_link = character(),
+                  twitter_link = character(),
+                  youtube_link = character(),
+                  youtube_trailer1 = character(),
+                  youtube_trailer2 = character()
+                )
+
+i = as.integer(0)
+
+for (fileName in fileNames) {
+  
+  line_results <- grep("pro.imdb.com", readLines(fileName, n=200))
+   if (length(line_results) > 0) { 
+     print(fileName)
+     print(line_results)
+  text_results <- readLines(fileName, n=200)
+  html_line <- text_results[line_results[4]]
+  imdb_id <- substr(html_line,98,106)
+  omdb_link <- paste(omdb_base,imdb_id,sep = "")
+  imdb_link <- paste(imdb_base,imdb_id,"/externalsites",sep = "")
+  i = i+1
+  df[i,]$line <- text_results[line_results[3]]
+  df[i,]$imdb_id <- imdb_id
+  df[i,]$omdb_link <- omdb_link
+  
+  omdb_json<-fromJSON(omdb_link)
+  df[i,]$title <- omdb_json$Title
+  df[i,]$year <- omdb_json$Year
+  df[i,]$imdbRating <- omdb_json$imdbRating
+  df[i,]$Metascore <- omdb_json$Metascore
+  df[i,]$imdb_link <- imdb_link
+  }
+}
+```
+
+## Step 3 Build IMDB link and get Social Media links:
+
+### Step 3.1: Download IMDB external link page into HTML files
+
+```{r}
+
+setwd("~/Documents/Study/Capstone 2021/project workspace/team-media/src/R")
+require(RCurl)
+require(XML)
+
+library(downloader)
+library(stringr)
+
+for(i in 1:594) {
+  myurl <- as.character(df[i,]$imdb_link)
+  filename<-paste("imdb_link_pages/", as.character(df[i,]$imdb_id), ".html", sep="")
+  print(filename)
+  download(myurl, filename)
+  Sys.sleep(1)
+}
+
+```
+### Step 3.2: Open each file and find Official links (Twitter, Youtube, etc)
+
+```{r}
+
+require(RCurl)
+require(XML)
+
+library(RJSONIO)
+
+setwd("~/Documents/Study/Capstone 2021/project workspace/team-media/src/R/imdb_link_pages")
+
+imdb_trailer_base = "https://www.imdb.com"
+fileNames <- Sys.glob("*.html")
+
+
+df_social <- data.frame(
+  internal_id=character(),
+  imdb_id=character(),
+  line=character(),
+  omdb_link=character(),
+  title=character(),
+  year=character(),
+  imdbRating=character(),
+  Metascore = character(),
+  imdb_link = character(),
+  twitter_link = character(),
+  youtube_link = character(),
+  youtube_trailer1 = character(),
+  youtube_trailer2 = character()
+)
+
+i = as.integer(0)
+
+for (fileName in fileNames) {
+  
+  youtube_line_results <- grep("YouTube - Trailer", readLines(fileName, n=1500), ignore.case=TRUE)
+  if (length(youtube_line_results) > 0) { 
+    #print(fileName)
+    #print(youtube_line_results)
+    
+    i = i+1
+    imdb_ext_text_results <- readLines(fileName, n=1500)
+    imdb_ext_html_line1 <- imdb_ext_text_results[youtube_line_results[1]-1]
+    imdb_ext_html_line2 <- imdb_ext_text_results[youtube_line_results[2]-1]
+    #youtube_trailer1 <- paste(imdb_trailer_base,sep="")
+    #youtube_trailer2 <- paste(imdb_trailer_base,sep="")
+    youtube_trailer1 <- paste(imdb_trailer_base,substr(imdb_ext_html_line1,14,350),sep="")
+    
+    
+    #print(youtube_trailer1)
+    #print(youtube_trailer2)
+    df_social[i,]$imdb_id <- substr(fileName,1,9)
+    df_social[i,]$youtube_trailer1 <- youtube_trailer1
+    if(!is.na(substr(imdb_ext_html_line2,14,350))){
+      youtube_trailer2 <- paste(imdb_trailer_base,substr(imdb_ext_html_line2,14,350),sep="")
+      df_social[i,]$youtube_trailer2 <- youtube_trailer2  
+    }
+  }   
+}
+
+```
+
+```{r}
+
+
+
+filename1 <- "MovieList1"
+filename2 <- "SocialLink1"
+
+write.csv(df, paste(filename1, ".csv",sep=""), row.names=FALSE)
+write.csv(df_social, paste(filename2, ".csv", sep=""), row.names=FALSE)
+
+```
+
